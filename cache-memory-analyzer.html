@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cache Memory Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --surface3: #22222f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0f0f5;
+    --muted: #888899;
+    --accent: #7c6ff7;
+    --accent2: #a78bfa;
+    --teal: #2dd4bf;
+    --coral: #f87171;
+    --amber: #fbbf24;
+    --green: #34d399;
+    --blue: #60a5fa;
+    --glow: rgba(124,111,247,0.25);
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,111,247,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,111,247,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .blob1, .blob2 {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(100px);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.35;
+  }
+  .blob1 { width: 500px; height: 500px; background: var(--accent); top: -150px; right: -100px; }
+  .blob2 { width: 400px; height: 400px; background: #2dd4bf; bottom: -100px; left: -100px; }
+  .app { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 24px 60px; }
+
+  header {
+    padding: 48px 0 40px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .logo-area { display: flex; align-items: center; gap: 16px; }
+  .logo-icon {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 0 30px var(--glow);
+    flex-shrink: 0;
+  }
+  .logo-text h1 {
+    font-family: var(--font-head);
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 30%, var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .logo-text p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .header-badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 10px; }
+  .hbadge {
+    padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    border: 1px solid;
+  }
+  .hb-purple { background: rgba(124,111,247,0.12); border-color: rgba(124,111,247,0.35); color: var(--accent2); }
+  .hb-teal { background: rgba(45,212,191,0.1); border-color: rgba(45,212,191,0.3); color: var(--teal); }
+  .hb-coral { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: var(--coral); }
+
+  .tabs-wrapper { margin-bottom: 32px; }
+  .tabs {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .tab {
+    padding: 9px 22px; border-radius: 9px; font-family: var(--font-head); font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; background: transparent; color: var(--muted); transition: all 0.2s; letter-spacing: 0.02em;
+  }
+  .tab.active { background: var(--accent); color: #fff; box-shadow: 0 0 20px rgba(124,111,247,0.4); }
+  .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+
+  .panel { display: none; animation: fadeUp 0.3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+  }
+  .card-title {
+    font-family: var(--font-head);
+    font-size: 15px; font-weight: 700;
+    color: var(--text);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-purple { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot-teal { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .dot-coral { background: var(--coral); box-shadow: 0 0 8px var(--coral); }
+  .dot-amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
+  .g2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 20px; }
+  .g3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .g4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px; }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 7px; text-transform: uppercase;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: 10px;
+    color: var(--text); font-family: var(--font-mono); font-size: 13px;
+    padding: 10px 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,111,247,0.15);
+  }
+  .field select option { background: #1a1a24; }
+
+  .btn {
+    padding: 11px 24px; border-radius: 10px; font-family: var(--font-head); font-size: 13px; font-weight: 700;
+    cursor: pointer; border: none; transition: all 0.2s; letter-spacing: 0.04em;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    color: #fff; width: 100%;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(124,111,247,0.35);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,111,247,0.5); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border2);
+    padding: 9px 18px;
+  }
+  .btn-secondary:hover { background: var(--surface3); border-color: var(--accent); color: var(--accent); }
+
+  .metric {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .metric:hover { transform: translateY(-2px); border-color: var(--border2); }
+  .metric .m-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .metric .m-value { font-family: var(--font-head); font-size: 30px; font-weight: 800; line-height: 1; }
+  .metric .m-unit { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .metric .m-bar { height: 3px; border-radius: 2px; margin-top: 12px; background: var(--surface3); overflow: hidden; }
+  .metric .m-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .metric-hit .m-value { color: var(--green); }
+  .metric-hit .m-bar-fill { background: var(--green); }
+  .metric-miss .m-value { color: var(--coral); }
+  .metric-miss .m-bar-fill { background: var(--coral); }
+  .metric-amat .m-value { color: var(--accent2); }
+  .metric-amat .m-bar-fill { background: linear-gradient(90deg, var(--accent), var(--teal)); }
+  .metric-total .m-value { color: var(--amber); }
+  .metric-total .m-bar-fill { background: var(--amber); }
+
+  /* ── ANIMATION CONTROLS ── */
+  .anim-controls {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 16px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    margin-bottom: 16px;
+  }
+  .anim-controls label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .speed-btn {
+    padding: 5px 14px; border-radius: 8px; font-family: var(--font-head); font-size: 11px; font-weight: 700;
+    cursor: pointer; border: 1px solid var(--border2); background: var(--surface3); color: var(--muted); transition: all 0.15s;
+  }
+  .speed-btn.sel { background: rgba(124,111,247,0.2); border-color: var(--accent); color: var(--accent2); }
+  .speed-btn:hover:not(.sel) { border-color: var(--border2); color: var(--text); }
+  .anim-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .anim-toggle input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  /* ── STAGE AREA ── */
+  .stage-area {
+    position: relative;
+    min-height: 80px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Current address orb */
+  .current-orb {
+    display: none;
+    align-items: center; justify-content: center;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,111,247,0.3), rgba(124,111,247,0.05));
+    border: 2px solid var(--accent);
+    font-family: var(--font-head);
+    font-size: 26px; font-weight: 800;
+    color: var(--accent2);
+    position: relative;
+    box-shadow: 0 0 30px rgba(124,111,247,0.5), inset 0 0 20px rgba(124,111,247,0.1);
+  }
+  .current-orb .orb-label {
+    position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); white-space: nowrap;
+  }
+  .current-orb::before {
+    content: '';
+    position: absolute; inset: -8px;
+    border-radius: 50%;
+    border: 1px solid rgba(124,111,247,0.2);
+    animation: orbRing 2s linear infinite;
+  }
+  .current-orb::after {
+    content: '';
+    position: absolute; inset: -16px;
+    border-radius: 50%;
+    border: 1px solid rgba(124,111,247,0.1);
+    animation: orbRing 2s linear infinite reverse;
+    animation-delay: -1s;
+  }
+  @keyframes orbRing { to { transform: rotate(360deg); } }
+
+  /* Result badge */
+  .result-badge {
+    display: none;
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    padding: 10px 22px;
+    border-radius: 12px;
+    font-family: var(--font-head); font-size: 22px; font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .result-badge.hit {
+    background: rgba(52,211,153,0.15);
+    border: 2px solid var(--green);
+    color: var(--green);
+    box-shadow: 0 0 40px rgba(52,211,153,0.4);
+    text-shadow: 0 0 20px rgba(52,211,153,0.8);
+  }
+  .result-badge.miss {
+    background: rgba(248,113,113,0.15);
+    border: 2px solid var(--coral);
+    color: var(--coral);
+    box-shadow: 0 0 40px rgba(248,113,113,0.4);
+    text-shadow: 0 0 20px rgba(248,113,113,0.8);
+  }
+
+  /* ── CACHE VISUALIZATION ── */
+  .cache-vis-wrap { margin-bottom: 20px; }
+  .cv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .cv-header span { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .leg-dot { width: 8px; height: 8px; border-radius: 3px; }
+
+  /* Cache grid with scanner */
+  .cache-grid-wrap { position: relative; }
+  .cache-grid { display: flex; flex-wrap: wrap; gap: 8px; position: relative; }
+
+  /* Scanner beam overlay */
+  .scanner-beam {
+    display: none;
+    position: absolute;
+    top: -4px; bottom: -4px;
+    width: 4px;
+    background: linear-gradient(180deg, transparent, var(--accent2), var(--teal), transparent);
+    border-radius: 2px;
+    box-shadow: 0 0 12px var(--accent), 0 0 24px rgba(124,111,247,0.4);
+    pointer-events: none;
+    z-index: 10;
+  }
+  /* Scanner orb that rides the beam */
+  .scanner-orb {
+    display: none;
+    position: absolute;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent2), var(--accent));
+    box-shadow: 0 0 16px var(--accent), 0 0 32px rgba(124,111,247,0.6);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 11;
+    top: 50%;
+  }
+  /* Trail behind the orb */
+  .scanner-trail {
+    display: none;
+    position: absolute;
+    height: 2px; top: 50%; transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(124,111,247,0.4));
+    pointer-events: none;
+    z-index: 9;
+    left: 0;
+  }
+
+  /* Shockwave ring */
+  .shockwave {
+    position: absolute;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: 2px solid;
+    pointer-events: none;
+    z-index: 20;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+  }
+  .shockwave.green { border-color: var(--green); box-shadow: 0 0 12px rgba(52,211,153,0.5); }
+  .shockwave.red { border-color: var(--coral); box-shadow: 0 0 12px rgba(248,113,113,0.5); }
+
+  /* Cache blocks */
+  .cache-block {
+    width: 58px; height: 58px;
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+    border: 1px solid;
+    transition: transform 0.2s;
+    cursor: default;
+    position: relative;
+    overflow: visible;
+    isolation: isolate;
+  }
+  .cache-block .cb-idx { font-size: 9px; opacity: 0.55; margin-top: 2px; }
+  .cb-empty { background: var(--surface2); border-color: var(--border); color: var(--muted); }
+  .cb-hit { background: rgba(52,211,153,0.15); border-color: var(--green); color: var(--green); box-shadow: 0 0 20px rgba(52,211,153,0.3); }
+  .cb-miss { background: rgba(248,113,113,0.15); border-color: var(--coral); color: var(--coral); box-shadow: 0 0 20px rgba(248,113,113,0.3); }
+  .cb-filled { background: rgba(124,111,247,0.1); border-color: rgba(124,111,247,0.35); color: var(--accent2); }
+  .cb-scanning {
+    background: rgba(124,111,247,0.2) !important;
+    border-color: var(--accent2) !important;
+    color: var(--accent2) !important;
+    box-shadow: 0 0 20px rgba(124,111,247,0.4) !important;
+  }
+
+  /* Block inner glow layer */
+  .cache-block::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 11px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .cb-hit::after { background: radial-gradient(circle, rgba(52,211,153,0.3), transparent); opacity: 1; }
+  .cb-miss::after { background: radial-gradient(circle, rgba(248,113,113,0.3), transparent); opacity: 1; }
+
+  /* Evict fly-off */
+  @keyframes flyOff {
+    0% { opacity: 1; transform: scale(1) translateY(0); }
+    40% { opacity: 1; transform: scale(1.2) translateY(-20px); }
+    100% { opacity: 0; transform: scale(0.3) translateY(-80px) rotate(30deg); }
+  }
+  .cb-evicting { animation: flyOff 0.5s ease-in forwards; }
+
+  /* Insert pop-in */
+  @keyframes insertPop {
+    0% { opacity: 0; transform: scale(0.3) translateY(30px); }
+    60% { transform: scale(1.15) translateY(-4px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .cb-inserting { animation: insertPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+  /* HIT explosion */
+  @keyframes hitExplode {
+    0% { box-shadow: 0 0 20px rgba(52,211,153,0.4); transform: scale(1); }
+    30% { box-shadow: 0 0 60px rgba(52,211,153,0.8), 0 0 120px rgba(52,211,153,0.4); transform: scale(1.25); }
+    60% { box-shadow: 0 0 40px rgba(52,211,153,0.6); transform: scale(1.1); }
+    100% { box-shadow: 0 0 20px rgba(52,211,153,0.3); transform: scale(1); }
+  }
+  .cb-hit-explode { animation: hitExplode 0.6s ease forwards; background: rgba(52,211,153,0.25) !important; border-color: var(--green) !important; color: var(--green) !important; }
+
+  /* MISS flash-red */
+  @keyframes missShake {
+    0%,100% { transform: translateX(0) scale(1); box-shadow: 0 0 20px rgba(248,113,113,0.4); }
+    15% { transform: translateX(-6px) scale(1.05); box-shadow: 0 0 40px rgba(248,113,113,0.7); }
+    30% { transform: translateX(6px); }
+    45% { transform: translateX(-4px); }
+    60% { transform: translateX(4px); }
+    75% { transform: translateX(-2px); }
+  }
+  .cb-miss-shake { animation: missShake 0.5s ease forwards; background: rgba(248,113,113,0.25) !important; border-color: var(--coral) !important; color: var(--coral) !important; }
+
+  /* Wave pulse ring on grid */
+  @keyframes wavePulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+  .wave-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid var(--green);
+    pointer-events: none;
+    z-index: 15;
+    animation: wavePulse 0.8s ease-out forwards;
+    transform-origin: center;
+  }
+  .wave-ring.red { border-color: var(--coral); }
+
+  /* Result badge animations */
+  @keyframes badgeHitIn {
+    0% { opacity: 0; transform: translateY(-50%) scale(0.5) translateX(30px); }
+    60% { transform: translateY(-50%) scale(1.1) translateX(0); }
+    100% { opacity: 1; transform: translateY(-50%) scale(1) translateX(0); }
+  }
+  @keyframes badgeMissIn {
+    0% { opacity: 0; transform: translateY(-50%) scale(0.5) translateX(30px); }
+    20% { transform: translateY(-48%) scale(1.1) translateX(2px); }
+    40% { transform: translateY(-52%) scale(1.05) translateX(-2px); }
+    60% { transform: translateY(-48%) scale(1.02) translateX(1px); }
+    100% { opacity: 1; transform: translateY(-50%) scale(1) translateX(0); }
+  }
+  .badge-appear-hit { animation: badgeHitIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+  .badge-appear-miss { animation: badgeMissIn 0.5s ease forwards; }
+
+  /* Neon trail particles */
+  .neon-particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 12;
+    width: 4px; height: 4px;
+  }
+
+  /* Address chips */
+  .addr-stream { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .addr-chip {
+    padding: 5px 12px; border-radius: 8px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--muted); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .addr-chip:hover { border-color: var(--accent); color: var(--accent2); }
+  .addr-chip.active { background: rgba(124,111,247,0.15); border-color: var(--accent); color: var(--accent2); box-shadow: 0 0 10px rgba(124,111,247,0.2); }
+  .addr-chip.was-hit { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.08); }
+  .addr-chip.was-miss { border-color: var(--coral); color: var(--coral); background: rgba(248,113,113,0.08); }
+  .addr-chip.upcoming { border-color: var(--accent); color: var(--accent2); background: rgba(124,111,247,0.12); box-shadow: 0 0 10px rgba(124,111,247,0.3); }
+
+  /* Log */
+  .log-scroll { max-height: 160px; overflow-y: auto; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border); }
+  .log-scroll::-webkit-scrollbar { width: 4px; }
+  .log-scroll::-webkit-scrollbar-track { background: transparent; }
+  .log-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .log-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+    transition: background 0.15s;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row:hover { background: var(--surface3); }
+  .log-num { color: var(--muted); width: 26px; font-size: 10px; }
+  .log-addr { font-weight: 700; min-width: 60px; }
+  .log-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    padding: 2px 8px; border-radius: 6px; text-transform: uppercase;
+  }
+  .tag-hit { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.25); }
+  .tag-miss { background: rgba(248,113,113,0.12); color: var(--coral); border: 1px solid rgba(248,113,113,0.25); }
+  .log-desc { color: var(--muted); font-size: 11px; }
+
+  /* Progress */
+  .anim-progress {
+    display: none; align-items: center; gap: 10px;
+    padding: 10px 16px; border-radius: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    margin-bottom: 16px; font-size: 12px;
+  }
+  .prog-bar-bg { flex: 1; height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+  .prog-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--teal)); transition: width 0.3s; width: 0%; }
+  .prog-label { color: var(--muted); font-size: 11px; min-width: 80px; text-align: right; }
+
+  /* Status */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; border-radius: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    margin-bottom: 16px; font-size: 12px; color: var(--muted);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .amat-box {
+    background: rgba(124,111,247,0.07); border: 1px solid rgba(124,111,247,0.2);
+    border-radius: 10px; padding: 10px 14px; font-size: 12px; color: var(--accent2);
+    margin-top: 14px; display: none;
+  }
+
+  /* ── COMPARE & THEORY (unchanged styles) ── */
+  .cmp-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border2); }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface2); }
+  th { padding: 12px 16px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border2); white-space: nowrap; }
+  td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr { transition: background 0.15s; }
+  tr:hover td { background: var(--surface2); }
+  .best-row td { background: rgba(124,111,247,0.07) !important; }
+  .best-row td:first-child { border-left: 2px solid var(--accent); }
+  .val-hit { color: var(--green); font-weight: 700; }
+  .val-miss { color: var(--coral); }
+  .val-amat { color: var(--accent2); font-weight: 700; }
+  .mini-bar-wrap { display: flex; align-items: center; gap: 6px; min-width: 120px; }
+  .mini-bar-bg { flex: 1; height: 6px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+  .mini-bar-fill { height: 100%; border-radius: 3px; transition: width 0.7s; }
+  .best-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; background: rgba(124,111,247,0.15); color: var(--accent2); border: 1px solid rgba(124,111,247,0.3); margin-left: 8px; }
+  .tech-name { font-family: var(--font-head); font-size: 13px; font-weight: 600; }
+  .chart-container { position: relative; width: 100%; height: 220px; }
+  .theory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 20px; }
+  .theory-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; }
+  .theory-card::after { content: ''; position: absolute; bottom: 0; right: 0; width: 80px; height: 80px; border-radius: 50%; opacity: 0.06; }
+  .tc-purple::after { background: var(--accent); box-shadow: 0 0 60px 30px var(--accent); }
+  .tc-teal::after { background: var(--teal); box-shadow: 0 0 60px 30px var(--teal); }
+  .tc-coral::after { background: var(--coral); box-shadow: 0 0 60px 30px var(--coral); }
+  .tc-amber::after { background: var(--amber); box-shadow: 0 0 60px 30px var(--amber); }
+  .theory-icon { font-size: 28px; margin-bottom: 12px; }
+  .theory-card h3 { font-family: var(--font-head); font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .theory-card p { color: var(--muted); font-size: 12px; line-height: 1.7; margin-bottom: 12px; }
+  .code-pill { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 8px 12px; font-family: var(--font-mono); font-size: 11px; color: var(--accent2); margin-bottom: 10px; display: block; }
+  .info-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 6px; }
+  .it-purple { background: rgba(124,111,247,0.1); color: var(--accent2); border: 1px solid rgba(124,111,247,0.2); }
+  .it-teal { background: rgba(45,212,191,0.1); color: var(--teal); border: 1px solid rgba(45,212,191,0.2); }
+  .it-coral { background: rgba(248,113,113,0.1); color: var(--coral); border: 1px solid rgba(248,113,113,0.2); }
+  .it-amber { background: rgba(251,191,36,0.1); color: var(--amber); border: 1px solid rgba(251,191,36,0.2); }
+  .formula-card { background: var(--surface2); border: 1px solid var(--border2); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .formula-card h4 { font-family: var(--font-head); font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+  .formula-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+  .formula-key { font-size: 11px; font-weight: 700; color: var(--muted); min-width: 80px; margin-top: 2px; }
+  .formula-val { font-family: var(--font-mono); font-size: 12px; color: var(--accent2); }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .footer { text-align: center; padding: 28px 0 0; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); margin-top: 40px; }
+  @media (max-width: 600px) { header { padding: 28px 0 24px; } .logo-text h1 { font-size: 18px; } .tab { padding: 8px 14px; font-size: 12px; } .cache-block { width: 48px; height: 48px; } }
+</style>
+</head>
+<body>
+<div class="blob1"></div>
+<div class="blob2"></div>
+
+<div class="app">
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">🗄️</div>
+      <div class="logo-text">
+        <h1>Cache Memory Analyzer</h1>
+        <p>Mapping Techniques &amp; Performance Simulation</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <span class="hbadge hb-purple">Direct Mapping</span>
+      <span class="hbadge hb-teal">Set Associative</span>
+      <span class="hbadge hb-coral">Fully Associative</span>
+    </div>
+  </header>
+
+  <div class="tabs-wrapper">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('sim',this)">⚡ Simulator</button>
+      <button class="tab" onclick="switchTab('cmp',this)">📊 Compare</button>
+      <button class="tab" onclick="switchTab('theory',this)">📖 Theory</button>
+    </div>
+  </div>
+
+  <!-- ============ SIMULATOR ============ -->
+  <div class="panel active" id="panel-sim">
+    <div class="g2">
+      <!-- Config -->
+      <div class="card">
+        <div class="card-title"><span class="dot dot-purple"></span> Configuration</div>
+        <div class="field">
+          <label>Mapping Technique</label>
+          <select id="mapping">
+            <option value="direct">Direct Mapping</option>
+            <option value="assoc">Fully Associative (LRU)</option>
+            <option value="set2">2-Way Set Associative</option>
+            <option value="set4">4-Way Set Associative</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Cache Size (blocks)</label>
+          <select id="cacheSize">
+            <option value="4">4 blocks</option>
+            <option value="8" selected>8 blocks</option>
+            <option value="16">16 blocks</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0">
+          <div class="field" style="margin-bottom:0">
+            <label>Cache Time (ns)</label>
+            <input type="number" id="tc" value="5" min="1" max="500">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Memory Time (ns)</label>
+            <input type="number" id="tm" value="100" min="1" max="5000">
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label>Address Reference Stream</label>
+          <input type="text" id="addrInput" value="1 2 3 4 1 2 5 1 2 3 4 5 1 2 3 6 7 8 1 2" placeholder="e.g. 1 2 3 4 1 2 5">
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" id="runBtn" onclick="startAnimatedSim()">▶ Run Simulation</button>
+          <button class="btn btn-secondary" onclick="resetSim()">↺</button>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="card">
+        <div class="card-title"><span class="dot dot-teal"></span> Performance Metrics</div>
+        <div class="g2" style="gap:12px;margin-bottom:0">
+          <div class="metric metric-hit">
+            <div class="m-label">Hit Ratio</div>
+            <div class="m-value" id="mHit">—</div>
+            <div class="m-unit">percent</div>
+            <div class="m-bar"><div class="m-bar-fill" id="bHit" style="width:0%"></div></div>
+          </div>
+          <div class="metric metric-miss">
+            <div class="m-label">Miss Ratio</div>
+            <div class="m-value" id="mMiss">—</div>
+            <div class="m-unit">percent</div>
+            <div class="m-bar"><div class="m-bar-fill" id="bMiss" style="width:0%"></div></div>
+          </div>
+          <div class="metric metric-amat">
+            <div class="m-label">AMAT</div>
+            <div class="m-value" id="mAmat">—</div>
+            <div class="m-unit">nanoseconds</div>
+            <div class="m-bar"><div class="m-bar-fill" id="bAmat" style="width:0%"></div></div>
+          </div>
+          <div class="metric metric-total">
+            <div class="m-label">References</div>
+            <div class="m-value" id="mTotal">—</div>
+            <div class="m-unit">accesses</div>
+            <div class="m-bar"><div class="m-bar-fill" id="bTotal" style="width:100%;background:var(--amber)"></div></div>
+          </div>
+        </div>
+        <div class="amat-box" id="amatBox"></div>
+      </div>
+    </div>
+
+    <!-- Visualization Card -->
+    <div class="card">
+      <div class="cv-header">
+        <div class="card-title" style="margin-bottom:0"><span class="dot dot-coral"></span> Memory Search Animation</div>
+        <div class="legend">
+          <div class="leg-item"><span class="leg-dot" style="background:var(--green)"></span> Hit</div>
+          <div class="leg-item"><span class="leg-dot" style="background:var(--coral)"></span> Miss / Load</div>
+          <div class="leg-item"><span class="leg-dot" style="background:var(--accent2)"></span> Cached</div>
+          <div class="leg-item"><span class="leg-dot" style="background:var(--surface3)"></span> Empty</div>
+        </div>
+      </div>
+
+      <!-- Animation controls -->
+      <div class="anim-controls" style="margin-top:16px">
+        <label>Scan speed:</label>
+        <button class="speed-btn" onclick="setSpeed(0,'slow',this)">🐢 Slow</button>
+        <button class="speed-btn sel" onclick="setSpeed(1,'med',this)">⚡ Medium</button>
+        <button class="speed-btn" onclick="setSpeed(2,'fast',this)">🚀 Fast</button>
+        <button class="speed-btn" onclick="setSpeed(3,'instant',this)">💨 Instant</button>
+        <div style="flex:1"></div>
+        <label class="anim-toggle"><input type="checkbox" id="animEnabled" checked> Animations on</label>
+      </div>
+
+      <!-- Address stream -->
+      <div style="margin-top:4px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Address Stream</div>
+        <div class="addr-stream" id="addrChips"></div>
+      </div>
+
+      <!-- Stage: current address orb + result badge -->
+      <div class="stage-area" id="stageArea">
+        <div class="current-orb" id="currentOrb">
+          <span id="orbValue">—</span>
+          <span class="orb-label">Searching...</span>
+        </div>
+        <div class="result-badge" id="resultBadge"></div>
+      </div>
+
+      <!-- Animation progress bar -->
+      <div class="anim-progress" id="animProgress">
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">Step</span>
+        <div class="prog-bar-bg"><div class="prog-bar-fill" id="progBarFill"></div></div>
+        <span class="prog-label" id="progLabel">0 / 0</span>
+      </div>
+
+      <!-- Cache blocks -->
+      <div class="cache-grid-wrap">
+        <div class="scanner-beam" id="scannerBeam"></div>
+        <div class="scanner-orb" id="scannerOrb"></div>
+        <div class="scanner-trail" id="scannerTrail"></div>
+        <div class="cache-grid" id="cacheVis"></div>
+      </div>
+
+      <!-- Log -->
+      <div style="margin-top:20px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Access Log</div>
+        <div class="log-scroll" id="accessLog">
+          <div style="padding:20px;text-align:center;color:var(--muted)">Run simulation to see log</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COMPARE ============ -->
+  <div class="panel" id="panel-cmp">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title"><span class="dot dot-purple"></span> Comparison Settings</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="flex:2;min-width:200px;margin-bottom:0">
+          <label>Address Stream</label>
+          <input type="text" id="cmpStream" value="1 2 3 4 1 2 5 1 2 3 4 5 1 2 3 6 7 8 1 2">
+        </div>
+        <div class="field" style="min-width:120px;margin-bottom:0">
+          <label>Cache Blocks</label>
+          <select id="cmpSize"><option value="4">4</option><option value="8" selected>8</option><option value="16">16</option></select>
+        </div>
+        <div class="field" style="min-width:90px;margin-bottom:0">
+          <label>Cache ns</label>
+          <input type="number" id="cmpTc" value="5" min="1">
+        </div>
+        <div class="field" style="min-width:90px;margin-bottom:0">
+          <label>Memory ns</label>
+          <input type="number" id="cmpTm" value="100" min="1">
+        </div>
+        <button class="btn btn-primary" style="width:auto;white-space:nowrap;margin-bottom:0" onclick="runCompare()">▶ Compare All</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title"><span class="dot dot-teal"></span> Results</div>
+      <div class="cmp-wrap">
+        <table>
+          <thead><tr><th>Technique</th><th>Hits</th><th>Misses</th><th>Hit Ratio</th><th>Miss Ratio</th><th>AMAT</th><th>Performance</th></tr></thead>
+          <tbody id="cmpBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Click Compare All to run analysis</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title"><span class="dot dot-amber"></span> AMAT (ns)</div>
+        <div class="chart-container"><canvas id="chartAmat"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot dot-teal"></span> Hit Ratio (%)</div>
+        <div class="chart-container"><canvas id="chartHit"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ THEORY ============ -->
+  <div class="panel" id="panel-theory">
+    <div class="theory-grid">
+      <div class="theory-card tc-purple">
+        <div class="theory-icon">🎯</div>
+        <h3>Direct Mapping</h3>
+        <p>Each memory block maps to exactly one cache line. Lookup is instant — just compute the index. However, conflict misses occur when two frequently used blocks share the same slot.</p>
+        <code class="code-pill">index = block_addr mod cache_size</code>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="info-tag it-purple">Fast lookup</span><span class="info-tag it-coral">Conflict misses</span><span class="info-tag it-teal">Low cost</span></div>
+      </div>
+      <div class="theory-card tc-teal">
+        <div class="theory-icon">🔀</div>
+        <h3>Fully Associative</h3>
+        <p>Any memory block can go into any cache line. Uses LRU for replacement. Maximum flexibility with zero conflict misses, but requires parallel search hardware.</p>
+        <code class="code-pill">Search all lines; replace LRU on miss</code>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="info-tag it-teal">No conflicts</span><span class="info-tag it-amber">High cost</span><span class="info-tag it-teal">Max flexibility</span></div>
+      </div>
+      <div class="theory-card tc-coral">
+        <div class="theory-icon">⚖️</div>
+        <h3>Set Associative</h3>
+        <p>Hybrid approach — cache divided into sets; each block maps to one set, placed freely within that set (LRU). 2-way and 4-way are the industry standard used in modern CPUs.</p>
+        <code class="code-pill">set = addr mod num_sets; LRU in set</code>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="info-tag it-teal">Best balance</span><span class="info-tag it-purple">Industry standard</span><span class="info-tag it-amber">Moderate cost</span></div>
+      </div>
+      <div class="theory-card tc-amber">
+        <div class="theory-icon">📐</div>
+        <h3>Performance Metrics</h3>
+        <p>Three key measurements tell us how well a cache is performing. AMAT combines both the hit and miss cases into one average access cost.</p>
+        <code class="code-pill">AMAT = Tc + miss_ratio × Tm</code>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="info-tag it-purple">Hit Ratio = H/N</span><span class="info-tag it-coral">Miss Ratio = 1 − h</span></div>
+      </div>
+    </div>
+    <div class="formula-card" style="margin-top:20px">
+      <h4>Full Formula Reference</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+        <div>
+          <div class="formula-row"><span class="formula-key">Hit Ratio</span><span class="formula-val">h = Total Hits / Total Accesses</span></div>
+          <div class="formula-row"><span class="formula-key">Miss Ratio</span><span class="formula-val">m = 1 − h</span></div>
+        </div>
+        <div>
+          <div class="formula-row"><span class="formula-key">AMAT</span><span class="formula-val">= h × Tc + m × (Tc + Tm)</span></div>
+          <div class="formula-row"><span class="formula-key">Simplified</span><span class="formula-val">= Tc + m × Tm</span></div>
+        </div>
+        <div>
+          <div class="formula-row"><span class="formula-key">Tc</span><span class="formula-val">Cache access time (ns)</span></div>
+          <div class="formula-row"><span class="formula-key">Tm</span><span class="formula-val">Main memory time (ns)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Cache Memory Mapping &amp; Performance Analyzer &nbsp;·&nbsp; CSE Micro Project &nbsp;·&nbsp; Simulates Direct, Associative &amp; Set Associative cache mapping</div>
+</div>
+
+<script>
+// ─── SIMULATION ENGINES ────────────────────────────────────────────
+function simDirect(addrs, size) {
+  const cache = new Array(size).fill(null);
+  let hits = 0, log = [];
+  addrs.forEach(a => {
+    const idx = a % size;
+    const hit = cache[idx] === a;
+    const evicted = (!hit && cache[idx] !== null) ? cache[idx] : null;
+    if (!hit) cache[idx] = a;
+    else hits++;
+    log.push({ addr: a, idx, hit, evicted, snap: [...cache], targetSlots: [idx] });
+  });
+  return { hits, misses: addrs.length - hits, log };
+}
+
+function simAssoc(addrs, size) {
+  const cache = [], lru = [];
+  let hits = 0, log = [];
+  addrs.forEach(a => {
+    const pos = cache.indexOf(a);
+    const hit = pos !== -1;
+    let evicted = null;
+    if (hit) {
+      hits++;
+      lru.splice(lru.indexOf(a), 1); lru.push(a);
+    } else {
+      if (cache.length >= size) {
+        evicted = lru.shift();
+        cache.splice(cache.indexOf(evicted), 1);
+      }
+      cache.push(a); lru.push(a);
+    }
+    const idx = cache.indexOf(a);
+    log.push({ addr: a, idx, hit, evicted, snap: [...cache], targetSlots: hit ? [pos] : [idx] });
+  });
+  return { hits, misses: addrs.length - hits, log };
+}
+
+function simSetAssoc(addrs, cacheSize, ways) {
+  const sets = cacheSize / ways;
+  const s = Array.from({ length: sets }, () => ({ data: [], lru: [] }));
+  let hits = 0, log = [];
+  addrs.forEach(a => {
+    const si = a % sets, cs = s[si];
+    const hit = cs.data.includes(a);
+    let evicted = null;
+    if (hit) {
+      hits++;
+      cs.lru.splice(cs.lru.indexOf(a), 1); cs.lru.push(a);
+    } else {
+      if (cs.data.length >= ways) {
+        evicted = cs.lru.shift();
+        cs.data.splice(cs.data.indexOf(evicted), 1);
+      }
+      cs.data.push(a); cs.lru.push(a);
+    }
+    const snap = [];
+    for (let i = 0; i < sets; i++) for (let j = 0; j < ways; j++) snap.push(s[i].data[j] ?? null);
+    const baseSlot = si * ways;
+    const targetSlots = hit
+      ? [baseSlot + cs.data.indexOf(a)]
+      : [baseSlot + cs.data.indexOf(a)];
+    log.push({ addr: a, idx: baseSlot, hit, evicted, snap, targetSlots });
+  });
+  return { hits, misses: addrs.length - hits, log };
+}
+
+function runEngine(addrs, size, mode) {
+  if (mode === 'direct') return simDirect(addrs, size);
+  if (mode === 'assoc') return simAssoc(addrs, size);
+  if (mode === 'set2') return simSetAssoc(addrs, size, 2);
+  return simSetAssoc(addrs, size, 4);
+}
+
+function computeAmat(hits, total, tc, tm) {
+  const m = 1 - hits / total;
+  return +(tc + m * tm).toFixed(2);
+}
+
+function parseAddrs(s) { return s.trim().split(/\s+/).map(Number).filter(n => !isNaN(n)); }
+
+// ─── SPEED CONFIG ──────────────────────────────────────────────────
+const SPEEDS = [
+  { scanDelay: 180, stepDelay: 900, label: 'slow' },
+  { scanDelay: 80, stepDelay: 500, label: 'med' },
+  { scanDelay: 30, stepDelay: 250, label: 'fast' },
+  { scanDelay: 0, stepDelay: 50, label: 'instant' },
+];
+let currentSpeed = 1;
+
+function setSpeed(idx, _label, btn) {
+  currentSpeed = idx;
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+
+// ─── TAB SWITCH ────────────────────────────────────────────────────
+function switchTab(t, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + t).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ─── STATE ─────────────────────────────────────────────────────────
+let animRunning = false;
+let animAbort = false;
+let currentSimLog = [];
+let currentSimAddrs = [];
+let currentSimSize = 8;
+let prevSnap = [];
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── BUILD CACHE BLOCKS ────────────────────────────────────────────
+function buildCacheBlocks(size, snap) {
+  const grid = document.getElementById('cacheVis');
+  grid.innerHTML = '';
+  prevSnap = snap || new Array(size).fill(null);
+  for (let i = 0; i < size; i++) {
+    const b = document.createElement('div');
+    b.className = 'cache-block';
+    const v = prevSnap[i];
+    if (v === null) {
+      b.classList.add('cb-empty');
+      b.innerHTML = `<span>—</span><span class="cb-idx">[${i}]</span>`;
+    } else {
+      b.classList.add('cb-filled');
+      b.innerHTML = `<span>${v}</span><span class="cb-idx">[${i}]</span>`;
+    }
+    b.dataset.idx = i;
+    grid.appendChild(b);
+  }
+}
+
+function getBlock(idx) {
+  return document.querySelector(`#cacheVis .cache-block[data-idx="${idx}"]`);
+}
+
+// ─── SCANNER ANIMATION ─────────────────────────────────────────────
+async function animateScan(size, targetSlots, isHit) {
+  const spd = SPEEDS[currentSpeed];
+  const animOn = document.getElementById('animEnabled').checked;
+  const grid = document.getElementById('cacheVis');
+  const beam = document.getElementById('scannerBeam');
+  const orb = document.getElementById('scannerOrb');
+  const trail = document.getElementById('scannerTrail');
+
+  if (!animOn || spd.scanDelay === 0) {
+    // Instant: just flash target
+    targetSlots.forEach(idx => {
+      const blk = getBlock(idx);
+      if (blk) blk.classList.add('cb-scanning');
+    });
+    await sleep(spd.stepDelay * 0.3);
+    targetSlots.forEach(idx => {
+      const blk = getBlock(idx);
+      if (blk) blk.classList.remove('cb-scanning');
+    });
+    return;
+  }
+
+  const gridRect = grid.getBoundingClientRect();
+  const gridOffsetLeft = grid.offsetLeft;
+
+  // Show beam and orb
+  beam.style.display = 'block';
+  orb.style.display = 'block';
+  trail.style.display = 'block';
+
+  const blocks = grid.querySelectorAll('.cache-block');
+  const slotsToScan = isHit ? [...Array(targetSlots[0] + 1).keys()] : [...Array(size).keys()];
+
+  for (let i = 0; i < slotsToScan.length; i++) {
+    if (animAbort) break;
+    const idx = slotsToScan[i];
+    const blk = blocks[idx];
+    if (!blk) continue;
+
+    const blkLeft = blk.offsetLeft + blk.offsetWidth / 2;
+    beam.style.left = (blkLeft - 2) + 'px';
+    orb.style.left = blkLeft + 'px';
+    trail.style.width = blkLeft + 'px';
+
+    // Flash scanning block
+    const wasClass = blk.classList.contains('cb-filled') ? 'cb-filled'
+      : blk.classList.contains('cb-empty') ? 'cb-empty' : '';
+    blk.classList.add('cb-scanning');
+
+    // Emit a neon particle
+    spawnParticle(blk, '#a78bfa');
+
+    await sleep(spd.scanDelay);
+
+    if (slotsToScan[i + 1] !== undefined || !isHit) {
+      blk.classList.remove('cb-scanning');
+      // restore class
+      if (wasClass && !blk.classList.contains(wasClass)) blk.classList.add(wasClass);
+    }
+  }
+
+  beam.style.display = 'none';
+  orb.style.display = 'none';
+  trail.style.display = 'none';
+}
+
+// ─── NEON PARTICLES ────────────────────────────────────────────────
+function spawnParticle(el, color) {
+  const grid = document.getElementById('cacheVis');
+  const p = document.createElement('div');
+  p.className = 'neon-particle';
+  const elRect = el.getBoundingClientRect();
+  const gridRect = grid.getBoundingClientRect();
+  const x = elRect.left - gridRect.left + el.offsetWidth / 2;
+  const y = elRect.top - gridRect.top + el.offsetHeight / 2;
+  p.style.cssText = `left:${x}px;top:${y}px;background:${color};box-shadow:0 0 6px ${color};`;
+  grid.parentElement.appendChild(p);
+  gsap.to(p, {
+    x: (Math.random() - 0.5) * 60,
+    y: -30 - Math.random() * 30,
+    opacity: 0,
+    duration: 0.6 + Math.random() * 0.3,
+    ease: 'power2.out',
+    onComplete: () => p.remove()
+  });
+}
+
+function spawnMultiParticles(el, color, count) {
+  for (let i = 0; i < count; i++) setTimeout(() => spawnParticle(el, color), i * 30);
+}
+
+// ─── SHOCKWAVE ─────────────────────────────────────────────────────
+function spawnShockwave(el, type) {
+  const grid = document.getElementById('cacheVis');
+  const sw = document.createElement('div');
+  sw.className = `shockwave ${type}`;
+  const elRect = el.getBoundingClientRect();
+  const parentRect = grid.parentElement.getBoundingClientRect();
+  sw.style.left = (elRect.left - parentRect.left + el.offsetWidth / 2) + 'px';
+  sw.style.top = (elRect.top - parentRect.top + el.offsetHeight / 2) + 'px';
+  grid.parentElement.appendChild(sw);
+  gsap.fromTo(sw, { scale: 0.5, opacity: 0.9 }, {
+    scale: 3, opacity: 0, duration: 0.7, ease: 'power2.out',
+    onComplete: () => sw.remove()
+  });
+  // Second ring delayed
+  setTimeout(() => {
+    const sw2 = sw.cloneNode();
+    grid.parentElement.appendChild(sw2);
+    gsap.fromTo(sw2, { scale: 0.3, opacity: 0.6 }, {
+      scale: 2.5, opacity: 0, duration: 0.9, ease: 'power2.out',
+      onComplete: () => sw2.remove()
+    });
+  }, 120);
+}
+
+// ─── HIT ANIMATION ─────────────────────────────────────────────────
+async function animateHit(targetSlot, addr) {
+  const animOn = document.getElementById('animEnabled').checked;
+  const blk = getBlock(targetSlot);
+  if (!blk) return;
+
+  if (!animOn) {
+    blk.className = 'cache-block cb-hit';
+    blk.innerHTML = `<span>${addr}</span><span class="cb-idx">[${targetSlot}]</span>`;
+    return;
+  }
+
+  // Update content
+  blk.className = 'cache-block cb-hit-explode';
+  blk.innerHTML = `<span>${addr}</span><span class="cb-idx">[${targetSlot}]</span>`;
+
+  spawnShockwave(blk, 'green');
+  spawnMultiParticles(blk, '#34d399', 8);
+
+  // Show HIT badge
+  showResultBadge('HIT', 'hit');
+
+  await sleep(600);
+  blk.className = 'cache-block cb-hit';
+}
+
+// ─── MISS ANIMATION ────────────────────────────────────────────────
+async function animateMiss(targetSlot, addr, evicted, prevSnapLocal, size) {
+  const animOn = document.getElementById('animEnabled').checked;
+  const spd = SPEEDS[currentSpeed];
+
+  if (!animOn) {
+    // Just update blocks
+    if (evicted !== null) {
+      // find evicted block
+      const evictIdx = prevSnapLocal.indexOf(evicted);
+      const evBlk = getBlock(evictIdx);
+      if (evBlk) { evBlk.className = 'cache-block cb-empty'; evBlk.innerHTML = `<span>—</span><span class="cb-idx">[${evictIdx}]</span>`; }
+    }
+    const blk = getBlock(targetSlot);
+    if (blk) { blk.className = 'cache-block cb-miss'; blk.innerHTML = `<span>${addr}</span><span class="cb-idx">[${targetSlot}]</span>`; }
+    showResultBadge('MISS', 'miss');
+    return;
+  }
+
+  // Flash all blocks red momentarily
+  const allBlocks = document.querySelectorAll('#cacheVis .cache-block');
+  allBlocks.forEach(b => { b.classList.add('cb-miss-shake'); });
+  showResultBadge('MISS', 'miss');
+  spawnMultiParticles(allBlocks[targetSlot] || allBlocks[0], '#f87171', 5);
+
+  await sleep(spd.stepDelay * 0.5);
+  allBlocks.forEach(b => b.classList.remove('cb-miss-shake'));
+
+  // Evict animation
+  if (evicted !== null) {
+    const evictIdx = prevSnapLocal.indexOf(evicted);
+    const evBlk = getBlock(evictIdx);
+    if (evBlk) {
+      evBlk.classList.add('cb-evicting');
+      spawnParticle(evBlk, '#f87171');
+      await sleep(500);
+      evBlk.className = 'cache-block cb-empty';
+      evBlk.innerHTML = `<span>—</span><span class="cb-idx">[${evictIdx}]</span>`;
+      evBlk.style.opacity = '1';
+      evBlk.style.transform = '';
+    }
+  }
+
+  // Insert animation
+  const blk = getBlock(targetSlot);
+  if (blk) {
+    blk.className = 'cache-block cb-miss cb-inserting';
+    blk.innerHTML = `<span>${addr}</span><span class="cb-idx">[${targetSlot}]</span>`;
+    spawnShockwave(blk, 'red');
+    spawnMultiParticles(blk, '#f87171', 6);
+    await sleep(500);
+    blk.className = 'cache-block cb-miss';
+  }
+}
+
+// ─── RESULT BADGE ──────────────────────────────────────────────────
+function showResultBadge(text, type) {
+  const badge = document.getElementById('resultBadge');
+  badge.style.display = 'flex';
+  badge.className = `result-badge ${type} badge-appear-${type}`;
+  badge.textContent = text;
+  // Auto-hide
+  setTimeout(() => {
+    gsap.to(badge, { opacity: 0, duration: 0.3, delay: 0.8, onComplete: () => { badge.style.display = 'none'; badge.style.opacity = 1; } });
+  }, 50);
+}
+
+// ─── CURRENT ORB ───────────────────────────────────────────────────
+function showOrb(addr) {
+  const orb = document.getElementById('currentOrb');
+  orb.style.display = 'flex';
+  document.getElementById('orbValue').textContent = addr;
+  gsap.fromTo(orb, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.7)' });
+}
+
+function hideOrb() {
+  const orb = document.getElementById('currentOrb');
+  gsap.to(orb, { scale: 0.8, opacity: 0, duration: 0.2, onComplete: () => { orb.style.display = 'none'; } });
+}
+
+// ─── MAIN ANIMATED SIMULATION ──────────────────────────────────────
+async function startAnimatedSim() {
+  if (animRunning) { animAbort = true; await sleep(100); }
+  animAbort = false;
+  animRunning = true;
+
+  const addrs = parseAddrs(document.getElementById('addrInput').value);
+  if (!addrs.length) { animRunning = false; return; }
+
+  const size = +document.getElementById('cacheSize').value;
+  const tc = +document.getElementById('tc').value;
+  const tm = +document.getElementById('tm').value;
+  const mode = document.getElementById('mapping').value;
+  const spd = SPEEDS[currentSpeed];
+  const animOn = document.getElementById('animEnabled').checked;
+
+  currentSimSize = size;
+  currentSimAddrs = addrs;
+
+  // Pre-compute full simulation
+  const res = runEngine(addrs, size, mode);
+  currentSimLog = res.log;
+
+  // Lock run button
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '⏳ Running...';
+
+  // Build initial empty cache
+  buildCacheBlocks(size, null);
+
+  // Show chips as upcoming
+  const chipsEl = document.getElementById('addrChips');
+  chipsEl.innerHTML = '';
+  addrs.forEach((a, i) => {
+    const c = document.createElement('span');
+    c.className = 'addr-chip upcoming';
+    c.textContent = a;
+    c.dataset.i = i;
+    c.onclick = () => {};
+    chipsEl.appendChild(c);
+  });
+
+  // Show progress
+  const prog = document.getElementById('animProgress');
+  prog.style.display = 'flex';
+  document.getElementById('progLabel').textContent = `0 / ${addrs.length}`;
+
+  // Clear log
+  const logEl = document.getElementById('accessLog');
+  logEl.innerHTML = '';
+
+  let currentCacheSnap = new Array(size).fill(null);
+
+  for (let i = 0; i < addrs.length; i++) {
+    if (animAbort) break;
+
+    const a = addrs[i];
+    const entry = res.log[i];
+    const spd = SPEEDS[currentSpeed];
+
+    // Update chip state
+    const chips = chipsEl.querySelectorAll('.addr-chip');
+    chips.forEach((c, ci) => {
+      if (ci < i) {
+        c.className = 'addr-chip ' + (res.log[ci].hit ? 'was-hit' : 'was-miss');
+      } else if (ci === i) {
+        c.className = 'addr-chip active';
+      } else {
+        c.className = 'addr-chip upcoming';
+      }
+    });
+
+    // Show orb
+    showOrb(a);
+
+    // Update progress
+    document.getElementById('progBarFill').style.width = ((i / addrs.length) * 100) + '%';
+    document.getElementById('progLabel').textContent = `${i + 1} / ${addrs.length}`;
+
+    // Scan animation
+    await animateScan(size, entry.targetSlots, entry.hit);
+    if (animAbort) break;
+
+    // Record prev snap before update
+    const snapBefore = [...currentCacheSnap];
+
+    if (entry.hit) {
+      await animateHit(entry.targetSlots[0], a);
+    } else {
+      await animateMiss(entry.targetSlots[0], a, entry.evicted, snapBefore, size);
+    }
+
+    if (animAbort) break;
+    currentCacheSnap = [...entry.snap];
+
+    // Sync remaining blocks to current state
+    for (let b = 0; b < size; b++) {
+      const blkEl = getBlock(b);
+      if (!blkEl) continue;
+      // Skip the block we just animated
+      if (b === entry.targetSlots[0]) continue;
+      const val = entry.snap[b];
+      if (val === null) {
+        if (!blkEl.classList.contains('cb-empty')) {
+          blkEl.className = 'cache-block cb-empty';
+          blkEl.innerHTML = `<span>—</span><span class="cb-idx">[${b}]</span>`;
+        }
+      } else {
+        if (!blkEl.classList.contains('cb-filled') && !blkEl.classList.contains('cb-hit') && !blkEl.classList.contains('cb-miss')) {
+          blkEl.className = 'cache-block cb-filled';
+          blkEl.innerHTML = `<span>${val}</span><span class="cb-idx">[${b}]</span>`;
+        }
+      }
+    }
+
+    // Add log entry
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `<span class="log-num">#${i+1}</span><span class="log-addr" style="color:${entry.hit?'var(--green)':'var(--coral)'}">Addr ${a}</span><span class="log-tag ${entry.hit?'tag-hit':'tag-miss'}">${entry.hit?'HIT':'MISS'}</span><span class="log-desc">${entry.hit?'→ Cache served the request':'→ Fetched from main memory'}</span>`;
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+
+    hideOrb();
+    await sleep(spd.stepDelay * 0.3);
+  }
+
+  if (!animAbort) {
+    // Final state: settle all blocks
+    const finalSnap = res.log[res.log.length - 1].snap;
+    for (let b = 0; b < size; b++) {
+      const blkEl = getBlock(b);
+      if (!blkEl) continue;
+      const val = finalSnap[b];
+      if (val === null) {
+        blkEl.className = 'cache-block cb-empty';
+        blkEl.innerHTML = `<span>—</span><span class="cb-idx">[${b}]</span>`;
+      } else {
+        blkEl.className = 'cache-block cb-filled';
+        blkEl.innerHTML = `<span>${val}</span><span class="cb-idx">[${b}]</span>`;
+      }
+    }
+
+    // Update chips final state
+    const chips = chipsEl.querySelectorAll('.addr-chip');
+    chips.forEach((c, ci) => {
+      c.className = 'addr-chip ' + (res.log[ci].hit ? 'was-hit' : 'was-miss');
+      c.onclick = () => {
+        document.querySelectorAll('.addr-chip').forEach(x => x.classList.remove('active'));
+        c.classList.add('active');
+        buildCacheBlocks(size, res.log[ci].snap);
+        const blk = getBlock(res.log[ci].targetSlots[0]);
+        if (blk) blk.classList.add(res.log[ci].hit ? 'cb-hit' : 'cb-miss');
+      };
+    });
+
+    // Final metrics
+    const total = addrs.length;
+    const hp = +(res.hits / total * 100).toFixed(1);
+    const mp = +(100 - hp).toFixed(1);
+    const a = computeAmat(res.hits, total, tc, tm);
+    document.getElementById('mHit').textContent = hp;
+    document.getElementById('mMiss').textContent = mp;
+    document.getElementById('mAmat').textContent = a;
+    document.getElementById('mTotal').textContent = total;
+    document.getElementById('bHit').style.width = hp + '%';
+    document.getElementById('bMiss').style.width = mp + '%';
+    document.getElementById('bAmat').style.width = Math.min(hp, 100) + '%';
+    const box = document.getElementById('amatBox');
+    box.style.display = 'block';
+    box.textContent = `AMAT = ${tc} + ${(mp/100).toFixed(3)} × ${tm} = ${a} ns  |  Hits: ${res.hits}  Misses: ${res.misses}`;
+
+    document.getElementById('progBarFill').style.width = '100%';
+    document.getElementById('progLabel').textContent = `${total} / ${total}`;
+  }
+
+  btn.disabled = false; btn.textContent = '▶ Run Simulation';
+  animRunning = false;
+}
+
+// ─── RESET ─────────────────────────────────────────────────────────
+function resetSim() {
+  animAbort = true;
+  animRunning = false;
+  setTimeout(() => {
+    ['mHit','mMiss','mAmat','mTotal'].forEach(id => document.getElementById(id).textContent = '—');
+    ['bHit','bMiss','bAmat'].forEach(id => document.getElementById(id).style.width = '0%');
+    document.getElementById('cacheVis').innerHTML = '';
+    document.getElementById('addrChips').innerHTML = '';
+    document.getElementById('accessLog').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Run simulation to see log</div>';
+    document.getElementById('amatBox').style.display = 'none';
+    document.getElementById('currentOrb').style.display = 'none';
+    document.getElementById('resultBadge').style.display = 'none';
+    document.getElementById('animProgress').style.display = 'none';
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').textContent = '▶ Run Simulation';
+    animAbort = false;
+  }, 150);
+}
+
+// ─── COMPARE ───────────────────────────────────────────────────────
+let chartA = null, chartH = null;
+
+function runCompare() {
+  const addrs = parseAddrs(document.getElementById('cmpStream').value);
+  if (!addrs.length) return;
+  const size = +document.getElementById('cmpSize').value;
+  const tc = +document.getElementById('cmpTc').value;
+  const tm = +document.getElementById('cmpTm').value;
+  const total = addrs.length;
+  const techs = [
+    { key:'direct', name:'Direct Mapping', color:'#7c6ff7' },
+    { key:'assoc',  name:'Fully Associative', color:'#2dd4bf' },
+    { key:'set2',   name:'2-Way Set Assoc', color:'#f87171' },
+    { key:'set4',   name:'4-Way Set Assoc', color:'#fbbf24' },
+  ];
+  const results = techs.map(t => {
+    const r = runEngine(addrs, size, t.key);
+    const hp = +(r.hits / total * 100).toFixed(1);
+    const mp = +(100 - hp).toFixed(1);
+    const a = computeAmat(r.hits, total, tc, tm);
+    return { ...t, hits: r.hits, misses: r.misses, hp, mp, amat: a };
+  });
+  const bestAmat = Math.min(...results.map(r => r.amat));
+  const body = document.getElementById('cmpBody');
+  body.innerHTML = '';
+  results.forEach(r => {
+    const isBest = r.amat === bestAmat;
+    const tr = document.createElement('tr');
+    if (isBest) tr.className = 'best-row';
+    tr.innerHTML = `<td><span class="tech-name" style="color:${r.color}">${r.name}</span>${isBest ? '<span class="best-badge">BEST</span>' : ''}</td><td class="val-hit">${r.hits}</td><td class="val-miss">${r.misses}</td><td class="val-hit">${r.hp}%</td><td class="val-miss">${r.mp}%</td><td class="val-amat">${r.amat} ns</td><td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${r.hp}%;background:${r.color}"></div></div><span style="font-size:11px;color:var(--muted);min-width:36px">${r.hp}%</span></div></td>`;
+    body.appendChild(tr);
+  });
+  const labels = results.map(r => r.name.replace(' Mapping','').replace('Fully ','').replace(' Set Assoc','SA'));
+  const colors = results.map(r => r.color + 'cc');
+  const borders = results.map(r => r.color);
+  const commonOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888899', font: { family:"'Space Mono',monospace", size: 11 } }, border: { color: 'rgba(255,255,255,0.08)' } },
+      x: { grid: { display: false }, ticks: { color: '#888899', font: { family:"'Space Mono',monospace", size: 10 } }, border: { color: 'rgba(255,255,255,0.08)' } }
+    }
+  };
+  if (chartA) chartA.destroy();
+  chartA = new Chart(document.getElementById('chartAmat'), { type:'bar', data:{ labels, datasets:[{ label:'AMAT (ns)', data:results.map(r=>r.amat), backgroundColor:colors, borderColor:borders, borderWidth:1.5, borderRadius:8 }] }, options:{ ...commonOpts, scales:{ ...commonOpts.scales, y:{ ...commonOpts.scales.y, beginAtZero:true } } } });
+  if (chartH) chartH.destroy();
+  chartH = new Chart(document.getElementById('chartHit'), { type:'bar', data:{ labels, datasets:[{ label:'Hit Ratio (%)', data:results.map(r=>r.hp), backgroundColor:colors, borderColor:borders, borderWidth:1.5, borderRadius:8 }] }, options:{ ...commonOpts, scales:{ ...commonOpts.scales, y:{ ...commonOpts.scales.y, beginAtZero:true, max:100, ticks:{ ...commonOpts.scales.y.ticks, callback:v=>v+'%' } } } } });
+}
+
+window.onload = () => startAnimatedSim();
+</script>
+</body>
+</html>
